@@ -11,10 +11,8 @@ int sign(double number)
     if (number < 0) {
         return -1;
     }
-    if (number == 0) {
-        return 1;
-    }
-    return 0;
+    if (std::abs(number) < 1e-18 && std::abs(number) < 1e-18) return 1;
+    return 1;
 }
 
 double* leftMultiply(double* matrix_1, double* matrix_2, int m, int n, int d)
@@ -120,20 +118,16 @@ double* hessenbergReduce(double* matrix, int n)
             norm = norm + matrix[j] * matrix[j];
         }
         norm = std::sqrt(norm);
+        if (norm < 1e-18) {
+            delete[] x;
+            delete[] a;
+        }
         a[0] = x[0] + sign(x[0]) * norm;
         double* identity{ new double[(n - i - 1) * (n - i - 1)] {} };
         identity = make_id(identity, n - i - 1);
 
         double* atranspose = transpose(a, n - i - 1, 1);
         double* denom = leftMultiply(atranspose, a, 1, n - i - 1, 1);
-        if (*denom == 0) {
-            delete[] x;
-            delete[] a;
-            delete[] identity;
-            delete[] atranspose;
-            delete[] denom;
-            continue;
-        }
         double div{ 1 / *denom };
         delete[] denom;
 
@@ -171,12 +165,13 @@ double* hessenbergReduce(double* matrix, int n)
     //memory inefficiencies are because we do not in-place matrix multiply
 }
 
-double* givensRotate(double* matrix, int n)
+void givensRotate(double* matrix, int n)
 {
     for (int i = 0; i < n - 1; i++)//# of rows
     {
         double diagonal{ matrix[i * n + i] };
         double subdiagonal{ matrix[i * n + i + 1] };
+        if (std::abs(diagonal) < 1e-18 && std::abs(subdiagonal) < 1e-18) continue;
         double x1 = diagonal / (std::sqrt(diagonal * diagonal + subdiagonal * subdiagonal));
         double x2 = subdiagonal / (std::sqrt(diagonal * diagonal + subdiagonal * subdiagonal));
         double x3 = -x2;
@@ -197,7 +192,6 @@ double* givensRotate(double* matrix, int n)
 
         }
     }
-    return matrix;
 }
 
 double* QRIterate(double* matrix, int n)
@@ -206,16 +200,9 @@ double* QRIterate(double* matrix, int n)
     double* mm{};
     for (int i = 0; i < 10*n; i++)
     {
-        mm = matrix;
-        matrix = givensRotate(matrix, n);
-        delete[] mm;
+        givensRotate(matrix, n);
     }
     return matrix;
 }
 
 //could implement wilkinson shift + once last subdiagonal entry is sufficiently small, stop iterating over that element
-
-int main()
-{
-    return 0;
-}
