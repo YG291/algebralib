@@ -12,7 +12,7 @@ int sign(double number)
         return -1;
     }
     if (number == 0) {
-        return 0;
+        return 1;
     }
     return 0;
 }
@@ -44,7 +44,7 @@ double* transpose(double* matrix, int m, int n)
     double* transposed{ new double[n * m] {} };
     for (int i = 0; i < m; i++) //number of rows in matrix
     {
-        for (int j = i; j < m*n; j+=m)
+        for (int j = i; j < m * n; j += m)
         {
             transposed[index] = matrix[j];
             index++;
@@ -56,7 +56,7 @@ double* transpose(double* matrix, int m, int n)
 double* matsum(double* matrix_1, double* matrix_2, int m, int n)
 //let's assume both matricies are mxn
 {
-    double* sumMatrix{new double[m*n]};
+    double* sumMatrix{ new double[m * n] };
     for (int i = 0; i < m * n; i++)
     {
         sumMatrix[i] = matrix_1[i] + matrix_2[i];
@@ -89,14 +89,14 @@ double* completeReflector(double* matrix, double* reflector, int n, int m)
 {
     //matrix is the final reflector, matrix is nxn, reflector is mxm
     //let's assume that matrix is prefilled with zeros
-    for (int i = 0; i < n-m; i++)
+    for (int i = 0; i < n - m; i++)
     {
         matrix[i * n + i] = 1;
     }
     int reflectorIndex = 0;
     for (int j = 0; j < m; j++)
     {
-        for (int k = (n-m + 1 + j) * n - m; k < (n-m + 1 + j) * n; k++)
+        for (int k = (n - m + 1 + j) * n - m; k < (n - m + 1 + j) * n; k++)
         {
             matrix[k] = reflector[reflectorIndex];
             reflectorIndex += 1;
@@ -107,6 +107,7 @@ double* completeReflector(double* matrix, double* reflector, int n, int m)
 
 double* hessenbergReduce(double* matrix, int n)
 {
+    //absolutely terrible big O asymtotic runtime. will fix later
     for (int i = 0; i < n - 2; i++)
     {
         double* x{ new double[n - i - 1] {} };
@@ -120,7 +121,7 @@ double* hessenbergReduce(double* matrix, int n)
         }
         norm = std::sqrt(norm);
         a[0] = x[0] + sign(x[0]) * norm;
-        double* identity{ new double[(n - i - 1) * (n - i - 1)] {}};
+        double* identity{ new double[(n - i - 1) * (n - i - 1)] {} };
         identity = make_id(identity, n - i - 1);
 
         double* atranspose = transpose(a, n - i - 1, 1);
@@ -138,7 +139,7 @@ double* hessenbergReduce(double* matrix, int n)
 
         double* proja = scalarmult(leftMultiply(a, atranspose, n - i - 1, 1, n - i - 1), n - i - 1, n - i - 1, div);
         proja = scalarmult(proja, n - i - 1, n - i - 1, -2);
-        double* subreflector{ new double[(n - i - 1) * (n - i - 1)] {}};
+        double* subreflector{ new double[(n - i - 1) * (n - i - 1)] {} };
         double* fullid{ new double[(n - i - 1) * (n - i - 1)] {} };
         fullid = make_id(fullid, n - i - 1);
 
@@ -146,16 +147,14 @@ double* hessenbergReduce(double* matrix, int n)
         subreflector = matsum(fullid, proja, n - i - 1, n - i - 1);
         delete[] mm;
 
-        double* housereflector{ new double[n*n] {} };
+        double* housereflector{ new double[n * n] {} };
         housereflector = completeReflector(housereflector, subreflector, n, n - i - 1);
-        
+
         mm = matrix;
         matrix = leftMultiply(housereflector, matrix, n, n, n);
         delete[] mm;
         mm = matrix;
-        double* transposedMatrix{ transpose(housereflector, n, n) };
-        matrix = leftMultiply(matrix, transposedMatrix, n, n, n);
-        delete[] transposedMatrix;
+        matrix = leftMultiply(matrix, housereflector, n, n, n);
         delete[] mm;
 
         delete[] x;
@@ -168,4 +167,55 @@ double* hessenbergReduce(double* matrix, int n)
         delete[] fullid;
     }
     return matrix;
+    //doesn't modify the same matrix which is kinda problematic
+    //memory inefficiencies are because we do not in-place matrix multiply
+}
+
+double* givensRotate(double* matrix, int n)
+{
+    for (int i = 0; i < n - 1; i++)//# of rows
+    {
+        double diagonal{ matrix[i * n + i] };
+        double subdiagonal{ matrix[i * n + i + 1] };
+        double x1 = diagonal / (std::sqrt(diagonal * diagonal + subdiagonal * subdiagonal));
+        double x2 = subdiagonal / (std::sqrt(diagonal * diagonal + subdiagonal * subdiagonal));
+        double x3 = -x2;
+        for (int j = 0; j < n; j++) // G*M, multiplying rows of M
+        {
+            double el1 = matrix[j * n + i];
+            double el2 = matrix[j * n + i + 1];
+            matrix[j * n + i] = x1 * el1 + x2 * el2;
+            matrix[j * n + i + 1] = x3 * el1 + x1 * el2;
+        }
+        for (int k = 0; k < n; k++) // M*G^T, multiplying cols of M
+        {
+            //in column-position wise pairs (i.e. third pos in column)
+            double el1 = matrix[i * n + k];
+            double el2 = matrix[(i + 1) * n + k];
+            matrix[i * n + k] = x1 * el1 + x2 * el2;
+            matrix[(i + 1) * n + k] = x3 * el1 + x1 * el2;
+
+        }
+    }
+    return matrix;
+}
+
+double* QRIterate(double* matrix, int n)
+{
+    matrix = hessenbergReduce(matrix, n);
+    double* mm{};
+    for (int i = 0; i < 10*n; i++)
+    {
+        mm = matrix;
+        matrix = givensRotate(matrix, n);
+        delete[] mm;
+    }
+    return matrix;
+}
+
+//could implement wilkinson shift + once last subdiagonal entry is sufficiently small, stop iterating over that element
+
+int main()
+{
+    return 0;
 }
