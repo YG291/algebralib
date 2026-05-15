@@ -11,7 +11,7 @@ int sign(double number)
     if (number < 0) {
         return -1;
     }
-    if (std::abs(number) < 1e-18 && std::abs(number) < 1e-18) return 1;
+    if (std::abs(number) < 1e-18) return 1;
     return 1;
 }
 
@@ -121,6 +121,7 @@ double* hessenbergReduce(double* matrix, int n)
         if (norm < 1e-18) {
             delete[] x;
             delete[] a;
+            continue;
         }
         a[0] = x[0] + sign(x[0]) * norm;
         double* identity{ new double[(n - i - 1) * (n - i - 1)] {} };
@@ -167,14 +168,26 @@ double* hessenbergReduce(double* matrix, int n)
 
 void givensRotate(double* matrix, int n)
 {
+    //idea: G is the 2x2 rotation matrix, 'complete it' as an nxn, 
+    //with G as top left, rest is I_n (mathematically)
+    //We do (GnGn-1...G2G1A)(G
+    double* cos{ new double[n - 1] };
+    double* sin{ new double[n - 1] };
     for (int i = 0; i < n - 1; i++)//# of rows
     {
         double diagonal{ matrix[i * n + i] };
         double subdiagonal{ matrix[i * n + i + 1] };
-        if (std::abs(diagonal) < 1e-18 && std::abs(subdiagonal) < 1e-18) continue;
-        double x1 = diagonal / (std::sqrt(diagonal * diagonal + subdiagonal * subdiagonal));
-        double x2 = subdiagonal / (std::sqrt(diagonal * diagonal + subdiagonal * subdiagonal));
+        double r = std::sqrt(diagonal * diagonal + subdiagonal * subdiagonal);
+        if (r < 1e-18) {
+            cos[i] = 1.0;
+            sin[i] = 0.0;
+            continue;
+        }
+        double x1 = diagonal / r;
+        double x2 = subdiagonal / r;
         double x3 = -x2;
+        cos[i] = x1;
+        sin[i] = x2;
         for (int j = 0; j < n; j++) // G*M, multiplying rows of M
         {
             double el1 = matrix[j * n + i];
@@ -182,6 +195,13 @@ void givensRotate(double* matrix, int n)
             matrix[j * n + i] = x1 * el1 + x2 * el2;
             matrix[j * n + i + 1] = x3 * el1 + x1 * el2;
         }
+    }
+
+    for (int i = 0; i < n-1; i++)//# of rows
+    {
+        double x1 = cos[i];
+        double x2 = sin[i];
+        double x3 = -x2;
         for (int k = 0; k < n; k++) // M*G^T, multiplying cols of M
         {
             //in column-position wise pairs (i.e. third pos in column)
@@ -192,17 +212,19 @@ void givensRotate(double* matrix, int n)
 
         }
     }
+    delete[] cos;
+    delete[] sin;
 }
 
 double* QRIterate(double* matrix, int n)
 {
     matrix = hessenbergReduce(matrix, n);
     double* mm{};
-    for (int i = 0; i < 10*n; i++)
+    for (int i = 0; i < 100*n; i++)
     {
         givensRotate(matrix, n);
     }
     return matrix;
 }
 
-//could implement wilkinson shift + once last subdiagonal entry is sufficiently small, stop iterating over that element
+//issue with the current implementation is that it does not account for complex eigenvalues
